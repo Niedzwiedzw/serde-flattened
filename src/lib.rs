@@ -1,14 +1,19 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod flatten_json_value;
+pub mod nested_csv;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Debug)]
+pub struct Flattened<T>(T);
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+#[derive(Debug)]
+pub struct FlattenedRef<'a, T>(&'a T);
+
+impl<T> Flattened<T> {
+    pub fn as_ref(&self) -> FlattenedRef<'_, T> {
+        FlattenedRef(&self.0)
     }
 }
+
+mod serde;
+
+#[cfg(test)]
+mod test;

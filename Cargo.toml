@@ -5,3 +5,16 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
+csv = "1"
+extension-traits = "2"
+itertools = "0"
+serde = { version = "1", default-features = false }
+serde_json = { version = "1", features = ["preserve_order"] }
+tap = "1"
+thiserror = "2"
+tracing = "0"
+
+[dev-dependencies]
+anyhow = "1"
+test-log = { version = "0", default-features = false, features = ["trace"] }
+serde = { version = "1.0", features = ["derive"] }

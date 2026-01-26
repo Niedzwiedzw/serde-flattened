@@ -2,13 +2,11 @@
 
 [![Crates.io](https://img.shields.io/crates/v/serde-flattened)](https://crates.io/crates/serde-flattened)
 
-A Serde extension for flattening nested structures into flat representations, enabling seamless serialization/deserialization of complex nested data to/from CSV and JSON.
+A `csv` and `serde_json` extension for flattening nested structures into flat representations. This enables for example serialization/deserialization of nested data to/from CSV.
 
 ## Features
-
-- **Flatten/Unflatten JSON Values**: Convert nested `serde_json::Value` to/from flat maps with dot-separated paths.
-- **Nested CSV Support**: Serialize/deserialize nested Rust structs to/from flat CSV files where nested fields use dot notation and values are JSON-encoded.
-- **Zero-cost abstractions**: Uses wrapper types `Flattened&lt;T&gt;` and `FlattenedRef&lt;'a, T&gt;` for serde integration.
+- **Nested CSV Support**: Serialize/deserialize nested Rust structs to/from flat CSV files where nested fields are encoded using `__`-separated paths.
+- **Flatten/Unflatten JSON Values**: Convert nested `serde_json::Value` to/from flat maps with `__`-separated paths.
 
 ## Quick Start
 
@@ -16,7 +14,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-serde-flattened = { version = "0.1.0", features = [] }
+serde-flattened = { version = "0.1.0" }
 csv = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -39,8 +37,8 @@ let nested = json!({
 });
 
 let flat_map = flattened(nested);
-assert_eq!(flat_map.get("user.name").unwrap(), "John");
-assert_eq!(flat_map.get("user.address.city").unwrap(), "NYC");
+assert_eq!(flat_map.get("user__name").unwrap(), "John");
+assert_eq!(flat_map.get("user__address__city").unwrap(), "NYC");
 
 let restored = unflattened(flat_map).unwrap();
 assert_eq!(restored, nested);

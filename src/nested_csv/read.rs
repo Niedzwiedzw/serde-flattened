@@ -1,10 +1,10 @@
 use {
     crate::Flattened,
     csv::StringRecord,
-    serde::de::DeserializeOwned,
+    serde::{Deserialize, de::DeserializeOwned},
     serde_json::Value,
     std::{fmt::Debug, io::Read, marker::PhantomData},
-    tap::Tap,
+    tap::{Pipe, Tap},
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -17,12 +17,26 @@ pub enum Error {
     ReadingRecord(#[source] csv::Error),
     #[error("Deserializing a single value")]
     Deserializing(#[source] csv::Error),
-    #[error("Deserializing a single flattened value")]
-    DeserializingFlattened(#[source] serde_json::Error),
+    #[error("Deserializing a single flattened value: {value}")]
+    DeserializingFlattened {
+        #[source]
+        source: serde_json::Error,
+        value: Box<str>,
+    },
+    #[error("Deserializing a single flattened json value:\n{value:#?}")]
+    DeserializingFlattenedJson {
+        #[source]
+        source: serde_json::Error,
+        value: serde_json::Value,
+    },
     #[error("Using serde_json parser to guess the type")]
     GuessingType(#[source] serde_json::Error),
     #[error("Missing field '{field}' (idx: {idx}) for record number {record}")]
-    MissingField { idx: usize, field: String, record: usize },
+    MissingField {
+        idx: usize,
+        field: String,
+        record: usize,
+    },
 }
 
 type Result<T> = std::result::Result<T, self::Error>;
@@ -41,6 +55,8 @@ impl<R: Read> csv::Reader<R> {
         NestedCsvReader::new(self)
     }
 }
+
+mod guessed;
 
 impl<R: Read, T: DeserializeOwned + Debug> NestedCsvReader<R, T> {
     pub fn into_inner(self) -> R {
@@ -65,15 +81,18 @@ impl<R: Read, T: DeserializeOwned + Debug> NestedCsvReader<R, T> {
                                         field: header.to_string(),
                                         record: self.count,
                                     })
-                                    .and_then(|value| {
-                                        serde_json::from_str::<serde_json::Value>(value)
-                                            .map_err(self::Error::DeserializingFlattened)
-                                            .map(|value| (header.to_string(), value))
+                                    .map(|value| {
+                                        serde_json::Value::String(value.into())
+                                            .pipe(|value| (header.to_string(), value))
                                     })
                             })
                             .collect::<Result<serde_json::Map<_, _>>>()
                             .map(Value::Object)
-                            .and_then(|v| serde_json::from_value::<Flattened<T>>(v).map_err(self::Error::DeserializingFlattened))
+                            .and_then(|value| {
+                                <Flattened<T>>::deserialize(value.clone()).map_err(|source| {
+                                    self::Error::DeserializingFlattenedJson { source, value }
+                                })
+                            })
                             .map(|Flattened(v)| v)
                     })
                     .transpose()

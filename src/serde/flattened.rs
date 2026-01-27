@@ -17,6 +17,19 @@ where
     }
 }
 
+#[extension_traits::extension(trait CustomDeErrorContextExt)]
+impl<T, E: std::error::Error> std::result::Result<T, E> {
+    fn serde_context<Err: serde::de::Error>(self, context: &str) -> std::result::Result<T, Err> {
+        self.map_err(|e| serde::de::Error::custom(format!("{e:?}\n{context}")))
+    }
+    fn with_serde_context<Err: serde::de::Error>(
+        self,
+        with_context: impl FnOnce() -> String,
+    ) -> std::result::Result<T, Err> {
+        self.map_err(|e| serde::de::Error::custom(format!("{e:?}\n{}", with_context())))
+    }
+}
+
 impl<'de, T> Deserialize<'de> for Flattened<T>
 where
     T: DeserializeOwned,
@@ -27,8 +40,16 @@ where
         D: serde::Deserializer<'de>,
     {
         serde_json::Value::deserialize(deserializer)
-            .and_then(|value| crate::flatten_json_value::unflatten::unflattened(value).map_err(serde::de::Error::custom))
-            .and_then(|value| serde_json::from_value::<T>(value).map_err(serde::de::Error::custom))
+            .serde_context("deserializing as serde_json::Value")
+            .and_then(|value| {
+                crate::flatten_json_value::unflatten::unflattened(value.clone())
+                    .with_serde_context(|| format!("unflattening value:\n{value:#?}"))
+            })
+            .and_then(|value| {
+                serde_json::from_value::<T>(value.clone()).with_serde_context(|| {
+                    format!("converting to {}:\n{value:#?}", std::any::type_name::<T>())
+                })
+            })
             .map(Self)
     }
 }

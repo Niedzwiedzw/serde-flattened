@@ -88,16 +88,22 @@ where
                     })
                     .collect::<Vec<_>>()
                     .pipe(|row| {
-                        self.writer
-                            .write_record(&row)
-                            .map_err(|source| self::Error::WritingRecord { idx: self.count, source })
+                        self.writer.write_record(&row).map_err(|source| {
+                            self::Error::WritingRecord {
+                                idx: self.count,
+                                source,
+                            }
+                        })
                     })
             })
     }
 }
 
 /// allows bypassing the limitation of csv crate (it disallows writing nested objects)
-pub fn write_nested_csv<'a, W, T>(writer: &mut W, items: impl IntoIterator<Item = &'a T>) -> Result<usize>
+pub fn write_nested_csv<'a, W, T>(
+    writer: &mut W,
+    items: impl IntoIterator<Item = &'a T>,
+) -> Result<usize>
 where
     W: Write,
     T: Serialize + Debug + 'a,

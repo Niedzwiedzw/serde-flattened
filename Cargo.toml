@@ -11,6 +11,7 @@ homepage = "https://github.com/Niedzwiedzw/serde-flattened"
 [dependencies]
 csv = "1"
 extension-traits = "2"
+indexmap = "2.13.0"
 itertools = "0"
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", features = ["preserve_order"] }

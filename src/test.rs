@@ -156,3 +156,42 @@ fn test_normal_data_fails() {
 fn test_flattening_fixes_the_problem() {
     back_and_forth_nesting_enabled(DATA.iter()).expect("going back and forth with nesting enabled")
 }
+
+/// Regression test for the issue where String fields containing numeric values
+/// would fail to deserialize because the intermediate JSON representation
+/// would parse "123" as a number instead of a string.
+#[test_log::test]
+fn test_string_field_with_numeric_value() {
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    struct Inner {
+        // This is a String, but the value looks like a number
+        id: String,
+        name: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    struct Outer {
+        inner: Inner,
+        count: i32,
+    }
+
+    let data = [
+        Outer {
+            inner: Inner {
+                id: "12345".to_string(), // Looks like a number!
+                name: "test".to_string(),
+            },
+            count: 42,
+        },
+        Outer {
+            inner: Inner {
+                id: "00123".to_string(), // Leading zeros - definitely should be string
+                name: "another".to_string(),
+            },
+            count: 7,
+        },
+    ];
+
+    back_and_forth_nesting_enabled(data.iter())
+        .expect("String fields with numeric values should round-trip correctly");
+}

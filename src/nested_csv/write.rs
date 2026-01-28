@@ -1,6 +1,7 @@
 use {
     crate::flatten_json_value::flatten::flattened,
     serde::Serialize,
+    serde_json::Map,
     std::{fmt::Debug, io::Write, marker::PhantomData},
     tap::Pipe,
 };
@@ -25,6 +26,10 @@ pub enum Error {
         idx: usize,
         #[source]
         source: csv::Error,
+    },
+    #[error("Extra headers compared to headers line:\n{extra_values:#?}")]
+    ExtraValuesComparedToHeaders {
+        extra_values: Map<String, serde_json::Value>,
     },
 }
 
@@ -65,7 +70,7 @@ where
         serde_json::to_value(item)
             .map_err(self::Error::SerializingToValue)
             .map(flattened)
-            .and_then(|item| -> Result<_> {
+            .and_then(|mut item| -> Result<_> {
                 if self.headers.is_none() {
                     let headers = item.keys().cloned().collect::<Vec<_>>();
                     self.writer
@@ -78,8 +83,8 @@ where
                     .as_ref()
                     .expect("headers to be set above")
                     .iter()
-                    .map(|h| item.get(h.as_str()).unwrap_or(&serde_json::Value::Null))
-                    .map(|f| match f {
+                    .map(|h| item.remove(h.as_str()).unwrap_or(serde_json::Value::Null))
+                    .map(|f| match &f {
                         serde_json::Value::Null => "".to_string(),
                         serde_json::Value::Bool(bool) => bool.to_string(),
                         serde_json::Value::Number(number) => number.to_string(),
@@ -87,7 +92,12 @@ where
                         other => panic!("bad flattening: {other:#?}"),
                     })
                     .collect::<Vec<_>>()
-                    .pipe(|row| {
+                    .pipe(|values| {
+                        item.is_empty().then_some(values).ok_or_else(|| {
+                            self::Error::ExtraValuesComparedToHeaders { extra_values: item }
+                        })
+                    })
+                    .and_then(|row| {
                         self.writer.write_record(&row).map_err(|source| {
                             self::Error::WritingRecord {
                                 idx: self.count,

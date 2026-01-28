@@ -1,10 +1,10 @@
 use {
-    crate::Flattened,
+    crate::serde::flattened_map_deserializer::{self, FlattenedMapDeserializer},
     csv::StringRecord,
-    serde::{Deserialize, de::DeserializeOwned},
-    serde_json::Value,
+    indexmap::IndexMap,
+    serde::de::DeserializeOwned,
     std::{fmt::Debug, io::Read, marker::PhantomData},
-    tap::{Pipe, Tap},
+    tap::Tap,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -15,22 +15,12 @@ pub enum Error {
     ReadingHeaders(#[source] csv::Error),
     #[error("Reading a single record")]
     ReadingRecord(#[source] csv::Error),
-    #[error("Deserializing a single value")]
-    Deserializing(#[source] csv::Error),
-    #[error("Deserializing a single flattened value: {value}")]
+    #[error("Deserializing flattened data: {value:#?}")]
     DeserializingFlattened {
         #[source]
-        source: serde_json::Error,
-        value: Box<str>,
+        source: flattened_map_deserializer::Error,
+        value: IndexMap<String, String>,
     },
-    #[error("Deserializing a single flattened json value:\n{value:#?}")]
-    DeserializingFlattenedJson {
-        #[source]
-        source: serde_json::Error,
-        value: serde_json::Value,
-    },
-    #[error("Using serde_json parser to guess the type")]
-    GuessingType(#[source] serde_json::Error),
     #[error("Missing field '{field}' (idx: {idx}) for record number {record}")]
     MissingField {
         idx: usize,
@@ -56,8 +46,6 @@ impl<R: Read> csv::Reader<R> {
     }
 }
 
-mod guessed;
-
 impl<R: Read, T: DeserializeOwned + Debug> NestedCsvReader<R, T> {
     pub fn into_inner(self) -> R {
         self.reader.into_inner()
@@ -68,34 +56,34 @@ impl<R: Read, T: DeserializeOwned + Debug> NestedCsvReader<R, T> {
             self.reader
                 .read_record(&mut self.rec)
                 .map_err(self::Error::ReadingRecord)
-                .and_then(|r| {
-                    r.then(|| {
-                        self.headers
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, header)| {
-                                self.rec
-                                    .get(idx)
-                                    .ok_or_else(|| self::Error::MissingField {
-                                        idx,
-                                        field: header.to_string(),
-                                        record: self.count,
-                                    })
-                                    .map(|value| {
-                                        serde_json::Value::String(value.into())
-                                            .pipe(|value| (header.to_string(), value))
-                                    })
-                            })
-                            .collect::<Result<serde_json::Map<_, _>>>()
-                            .map(Value::Object)
-                            .and_then(|value| {
-                                <Flattened<T>>::deserialize(value.clone()).map_err(|source| {
-                                    self::Error::DeserializingFlattenedJson { source, value }
+                .and_then(|has_record| {
+                    has_record
+                        .then(|| {
+                            // Build a flat map of String -> String
+                            self.headers
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, header)| {
+                                    self.rec
+                                        .get(idx)
+                                        .ok_or_else(|| self::Error::MissingField {
+                                            idx,
+                                            field: header.to_string(),
+                                            record: self.count,
+                                        })
+                                        .map(|value| (header.to_string(), value.to_string()))
                                 })
-                            })
-                            .map(|Flattened(v)| v)
-                    })
-                    .transpose()
+                                .collect::<Result<IndexMap<String, String>>>()
+                                .and_then(|map| {
+                                    T::deserialize(FlattenedMapDeserializer::new(&map)).map_err(
+                                        |source| self::Error::DeserializingFlattened {
+                                            source,
+                                            value: map,
+                                        },
+                                    )
+                                })
+                        })
+                        .transpose()
                 })
                 .transpose()
                 .tap(|v| {

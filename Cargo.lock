@@ -207,6 +207,7 @@ dependencies = [
  "anyhow",
  "csv",
  "extension-traits",
+ "indexmap",
  "itertools",
  "serde",
  "serde_json",

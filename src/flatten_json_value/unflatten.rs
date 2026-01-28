@@ -59,7 +59,7 @@ pub fn unflatten_iter(value: Value) -> impl Iterator<Item = Result<(FieldPath<'s
         other => {
             tracing::debug!("other=\n{other:#?}");
             Err(self::Error::UnsupportedTopLevelValue(match other {
-                Value::Null => "Value::Null ",
+                Value::Null => "Value::Null",
                 Value::Bool(_) => "Value::Bool",
                 Value::Number(_) => "Value::Number",
                 Value::String(_) => "Value::String",

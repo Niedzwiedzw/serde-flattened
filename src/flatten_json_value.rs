@@ -55,6 +55,7 @@ impl<'a> FieldPath<'a> {
             _ => Some((self.0.remove(0), self)),
         }
     }
+
     pub fn to_owned(&self) -> FieldPath<'static> {
         self.0
             .iter()
@@ -62,9 +63,11 @@ impl<'a> FieldPath<'a> {
             .collect::<Vec<_>>()
             .pipe(FieldPath)
     }
+
     pub fn join(&self, segment: Segment<'a>) -> Self {
         self.clone().tap_mut(|p| p.0.push(segment))
     }
+
     pub fn as_ref<'b>(&'b self) -> FieldPath<'b> {
         FieldPath(self.0.iter().map(|b| b.as_ref()).collect())
     }
